@@ -1,0 +1,28 @@
+# Tailcat Minecraft reuse decision
+
+Date: 2026-10-28. Scope: Minecraft Java Edition client mod; bundled Tailcat; Fabric/Forge/NeoForge across selected Minecraft versions; `/tc-status` diagnostics.
+
+## Decision
+
+Use `tailscale/tailcat-for-minecraft` at `c561a896f3e48c98bde36b0a810b29f560b074a5` as the upstream, BSD-3-Clause. Preserve LICENSE and attribution. The repository is explicitly an unsupported experimental prototype, not a production-ready distribution.
+
+Repository: https://github.com/tailscale/tailcat-for-minecraft
+
+Reuse its Go helper, invitation envelope, native extraction/checksum approach, and share/join interaction. Refactor Minecraft and loader dependencies behind adapters; add measured telemetry and client commands. Keep the actual Tailcat implementation as a pinned dependency instead of reimplementing its transport.
+
+## Candidates considered
+
+| Candidate | Fit | Decision |
+| --- | --- | --- |
+| tailscale/tailcat-for-minecraft | Fabric 1.21.1; bundled helper; share/join already implemented; BSD-3-Clause | Upstream host; extend and verify |
+| tailscale/tailcat | Go userspace WireGuard/NAT traversal/DERP library; BSD-3-Clause | Helper dependency; lock version |
+| Gaming32/world-host | World sharing and multiplayer UI; MIT | Reference only: different networking/control-service architecture |
+| Marker284/tailmod | Tailscale/tsnet integration, native packaging; license not verified | Excluded: Tailnet model differs from Tailcat invitations |
+| Architectury | Common/platform project layout | Optional build reference; avoid mandatory runtime API for small lifecycle surface |
+| Stonecutter | Minecraft version source preprocessing | Candidate for later larger matrices; initial explicit version source sets avoid coupling build plugins |
+
+Evidence: upstream README and LICENSE inspected locally after clone; project indexed through codebase-memory before source exploration. Runtime verification is recorded in the implementation ledger; README claims alone are not verification. No candidate copies beyond the selected BSD upstream are incorporated.
+
+## Required upstream follow-up
+
+Native signing/notarization before public release; complete Go dependency notices; multiple peers, authentication and direct/DERP behavior on separate machines. Native helpers must be bundled in normal artifacts, not fetched at player runtime.
