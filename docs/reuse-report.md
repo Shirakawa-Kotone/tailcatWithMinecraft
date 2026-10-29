@@ -34,3 +34,7 @@ The universal package adds small Java8 loader entrypoints and standard-library U
 For the10MB preference, additionally offer one-platform offline native profiles rather than silently removing platforms from the universal package. Universal distribution is guarded at50,000,000 bytes.
 
 Native signing/notarization before public release; complete Go dependency notices; multiple peers, authentication and direct/DERP behavior on separate machines. Native helpers must be bundled in normal artifacts, not fetched at player runtime.
+
+## Sharing controls and shorter invitations (2026-10-29)
+
+Reuse the vendored Tailcat native `tc` invitation format and existing helper version-1 envelope. The shorter code preserves all opaque connection bytes; only the redundant wrapper is removed for copying and restored before helper invocation. No cryptographic change, dependency upgrade or external short-link database is required. Very short lookup codes would need a separately operated service and are outside this implementation. Vanilla LAN publishing and the existing server executor remain the sources of truth for the port and player roster.

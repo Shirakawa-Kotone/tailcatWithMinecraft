@@ -65,6 +65,8 @@ public final class HelperProcess implements AutoCloseable {
         return result;
     }
     public boolean isAlive() { return !closing.get() && process.isAlive(); }
+    /** True only after the underlying OS process has exited, including during async close. */
+    public boolean hasExited() { return !process.isAlive(); }
     public void speedtest() throws IOException {
         synchronized (stdinLock) {
             if (closing.get() || !process.isAlive()) throw new IOException("Helper session is closed");

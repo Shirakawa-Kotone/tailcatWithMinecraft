@@ -9,7 +9,7 @@
 ./scripts/build-natives.sh
 bash -c 'source scripts/go-env.sh; python3 scripts/generate-notices.py'
 
-# 编译全部37组合、测试、导出七个JAR，再清理项目缓存
+# 编译全部38组合、测试、导出七个JAR，再清理项目缓存
 ./scripts/package.sh
 
 # 开发期间保留缓存；已编译完可直接导出
@@ -30,7 +30,7 @@ python3 scripts/smoke-network.py --allow-network
 
 # 分享时的账号验证
 
-0.3.1起，新启动的mod默认不要求Minecraft正版账号验证。房主可以在分享界面切换；切换会重建邀请并断开已有访客。
+0.3.1起，新启动的mod默认不要求Minecraft正版账号验证。房主可以在开始分享前切换；分享过程中需先停止分享才能修改。
 设置仅作用于当前分享的内置服务器；停止分享或启动失败时恢复之前的认证设置。不会修改启动器、全局账号信息或其他服务器的配置。
 关闭验证时，邀请仍是隧道访问凭据，但Minecraft账号身份未经验证；离线身份的UUID／玩家数据可能与在线身份不同。
 

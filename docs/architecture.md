@@ -5,9 +5,9 @@ Approved direction: shared Java core, Minecraft/version/loader adapters and bund
 ## Scope
 
 - Java Edition client mod, integrated-world sharing and invitation joining.
-- Matrix: 14 exact stable-version anchors from1.16.5 through26.3,37 Fabric/Forge/NeoForge combinations. Universal distribution embeds one isolated adapter per combination; see docs/version-matrix.md. Adjacent unlisted patch versions are not implied.
+- Matrix: 15 exact stable-version anchors from1.16.5 through26.3,38 Fabric/Forge/NeoForge combinations. Universal distribution embeds one isolated adapter per combination; see docs/version-matrix.md. Adjacent unlisted patch versions are not implied.
 - Bundled Windows/macOS/Linux helpers; no player installation of Tailscale or Tailcat.
-- Since0.3.1, integrated-world sharing defaults to offline authentication by explicit user request. The host can opt in through the share screen; policy changes recreate the invitation. A server-executor lease restores the prior setting on stop/failure/cancel. Invitations authorize network access, not player identity; launcher accounts and unrelated servers are unchanged.
+- Since0.3.1, integrated-world sharing defaults to offline authentication by explicit user request. The host can opt in through the share screen; policy changes are available before starting a share, with a stop required for an active session. A server-executor lease restores the prior setting on stop/failure/cancel. Invitations authorize network access, not player identity; launcher accounts and unrelated servers are unchanged.
 - No protocol translation between incompatible Minecraft versions or modpacks.
 
 ## Boundaries
@@ -38,3 +38,11 @@ Share publishes the integrated server using normal LAN behavior and starts the h
 ## Validation
 
 Java unit tests for malformed events, rates/status formatting and lifecycle; Go tests for invitations, counters and cancellation; compile/package each matrix artifact; verify bundled native manifests. Real two-machine UDP/DERP, account authentication, multi-visitor and OS signing checks are separate manual acceptance items.
+
+## Sharing controls and invitation compatibility (0.3.3)
+
+Opening the sharing screen reads an immutable `ShareView`; it does not publish the world or launch a helper. Explicit controls start, cancel startup, stop, copy, or return. Returning only changes the screen. Retired host processes remain tracked until actual OS termination, independently of a close request. Session identities reject late readiness and network callbacks. The presentation state API is public because adapters and canonical core use different runtime class loaders.
+
+The online list uses actual integrated-server player names, sampled on the server executor once per second and returned to the client with world-identity checks. It includes LAN players and the host; network peer identifiers are not presented as player identities. The original LAN menu remains available before publishing. A separate LAN status entry remains available afterward, without rebuilding the listener.
+
+`InviteCode` removes only the legacy JSON/base64 envelope and preserves the opaque native `tc` token. Joining expands it back into the existing version-1 `mcl1_` envelope before invoking the unchanged helper. Legacy copy/input remain supported. Validation bounds lengths and rejects malformed encodings, JSON fields and unsupported versions without including input in errors. There is no external mapping service or new URL handler.

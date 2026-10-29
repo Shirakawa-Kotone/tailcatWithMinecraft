@@ -10,6 +10,39 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class HelperProcessTest {
+    @Test void closingDoesNotReportTerminationUntilTheProcessExits() {
+        ControlledProcess process = new ControlledProcess();
+        try (HelperProcess session = new HelperProcess(process, event -> {})) {
+            assertFalse(session.hasExited());
+            session.close();
+            assertFalse(session.isAlive());
+            assertFalse(session.hasExited());
+            process.finish();
+            assertTrue(session.hasExited());
+        } finally { process.finish(); }
+    }
+
+    /** No sleeps: tests independently control close request and actual process termination. */
+    private static final class ControlledProcess extends Process {
+        private final java.util.concurrent.CountDownLatch exit = new java.util.concurrent.CountDownLatch(1);
+        private final java.io.InputStream stdout = new java.io.InputStream() {
+            @Override public int read() throws IOException {
+                try { exit.await(); return -1; }
+                catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IOException(); }
+            }
+        };
+        void finish() { exit.countDown(); }
+        @Override public java.io.OutputStream getOutputStream() { return new java.io.ByteArrayOutputStream(); }
+        @Override public java.io.InputStream getInputStream() { return stdout; }
+        @Override public java.io.InputStream getErrorStream() { return new java.io.ByteArrayInputStream(new byte[0]); }
+        @Override public int waitFor() throws InterruptedException { exit.await(); return 0; }
+        @Override public boolean waitFor(long timeout, TimeUnit unit) throws InterruptedException { return exit.await(timeout, unit); }
+        @Override public boolean isAlive() { return exit.getCount() != 0; }
+        @Override public int exitValue() { if (isAlive()) throw new IllegalThreadStateException(); return 0; }
+        @Override public void destroy() { /* termination is controlled by the test */ }
+        @Override public Process destroyForcibly() { return this; }
+    }
+
     private Process fixture(String mode) throws IOException {
         String java = Paths.get(System.getProperty("java.home"), "bin", "java").toString();
         return new ProcessBuilder(java, "-cp", System.getProperty("fixture.classpath", System.getProperty("java.class.path")), Fixture.class.getName(), mode).start();

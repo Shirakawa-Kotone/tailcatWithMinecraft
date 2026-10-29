@@ -18,10 +18,10 @@ public final class JoinRemoteScreen extends Screen {
         invite.setMaxLength(32768);
         addRenderableWidget(invite);
         connect = addRenderableWidget(new Button(width / 2 - 102, height / 2 + 12, 100, 20, Component.translatable("mclink.connect"), b -> begin()));
-        invite.setResponder(value -> connect.active = !pending && value.trim().startsWith("mcl1_"));
+        invite.setResponder(value -> connect.active = !pending && InviteCode.isSupported(value));
         invite.setValue(previous);
         invite.setEditable(!pending);
-        connect.active = !pending && previous.trim().startsWith("mcl1_");
+        connect.active = !pending && InviteCode.isSupported(previous);
         addRenderableWidget(new Button(width / 2 + 2, height / 2 + 12, 100, 20, Component.translatable("gui.cancel"), b -> onClose()));
         setFocused(invite);
         invite.setFocus(true);

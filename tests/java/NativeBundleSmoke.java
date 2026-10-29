@@ -1,4 +1,6 @@
 import com.tailscale.mclink.NativeHelper;
+import com.tailscale.mclink.InviteCode;
+import com.tailscale.mclink.ShareView;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
@@ -11,8 +13,16 @@ public final class NativeBundleSmoke {
     public static void main(String[] args) throws Exception {
         Class.forName("com.tailscale.mclink.Compatibility");
         Class.forName("com.tailscale.mclink.HostAuthentication");
+        if (!"tcAA".equals(InviteCode.toShort(InviteCode.toFull("tcAA"))))
+            throw new AssertionError("Invitation conversion failed");
+        ShareView.State state = new ShareView.State();
+        Object host = new Object();
+        state.starting(host);
+        state.ready(host, "synthetic invitation");
+        if (state.snapshot().phase() != ShareView.Phase.ON)
+            throw new AssertionError("Sharing view failed");
         Path game = Paths.get(args[0]);
-        String version = args.length > 1 ? args[1] : "0.3.1";
+        String version = args.length > 1 ? args[1] : "0.3.3";
         long start = System.nanoTime();
         Path helper = NativeHelper.extract(game, version, false);
         System.out.println("Extracted " + Files.size(helper) + " bytes in " + (System.nanoTime() - start) / 1_000_000 + " ms");

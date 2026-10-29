@@ -20,55 +20,84 @@ public final class ScreenState implements AutoCloseable {
     private final boolean development;
     private long generation;
     private Session session;
+    private final ShareView.State shareState = new ShareView.State();
+    private final List<Session> stoppingHosts = new java.util.ArrayList<>();
+    private IntegratedServer playerWorld;
+    private long nextPlayerSample;
+    private boolean playerSamplePending;
     private boolean authenticationEnabled = HostAuthentication.DEFAULT_REQUIRED;
     ScreenState(String modVersion, boolean development) { this.modVersion = modVersion; this.development = development; }
+
+    public ShareView shareView() { return shareState.snapshot(); }
 
     public boolean authenticationEnabled() { return authenticationEnabled; }
     public CompletableFuture<String> share() { return share(authenticationEnabled); }
     public CompletableFuture<String> share(boolean requireAuthentication) {
         IntegratedServer server = client.getSingleplayerServer();
-        if (server == null) return failedFuture(new IllegalStateException("No singleplayer world is open"));
+        if (server == null) {
+            shareState.failedToStart();
+            TailcatClient.message("Tailcat：没有打开单人世界。");
+            return failedFuture(new IllegalStateException("No singleplayer world is open"));
+        }
         // Reopening the invitation screen must not kick current visitors.
         if (session != null && session.host == server && session.mode.equals("host") && session.authenticationRequired == requireAuthentication
                 && (session.process == null || session.process.isAlive())) return session.invite;
         stop();
         authenticationEnabled = requireAuthentication;
-        int port = server.getPort();
-        if (!server.isPublished()) {
-            port = HTTPUtil.getAvailablePort();
-            if (!server.publishServer(server.getDefaultGameType(), false, port))
-                return failedFuture(new IllegalStateException("Minecraft could not publish this world"));
+        int port;
+        try {
+            port = server.getPort();
+            if (!server.isPublished()) {
+                port = HTTPUtil.getAvailablePort();
+                if (!server.publishServer(server.getDefaultGameType(), false, port))
+                    throw new IllegalStateException("Minecraft could not publish this world");
+            }
+        } catch (RuntimeException failure) {
+            shareState.failedToStart();
+            TailcatClient.message("Tailcat：无法开放这个世界。");
+            return failedFuture(new IllegalStateException("Minecraft could not publish this world"));
         }
         final int forwardPort = port;
         Session expected = new Session(++generation, "host", server);
         session = expected;
+        shareState.starting(expected);
         expected.authenticationRequired = requireAuthentication;
         expected.authentication = HostAuthentication.configure(server, server::usesAuthentication,
                 server::setUsesAuthentication, requireAuthentication);
-        expected.authentication.thenCompose(ignored -> start(expected, java.util.Arrays.asList("host", "--target", "127.0.0.1:" + forwardPort))).whenComplete((event, error) -> client.execute(() -> {
-            if (!current(expected)) return;
-            if (error != null) { fail(expected, error); return; }
-            expected.invite.complete(event.invite());
-        }));
+        expected.authentication.thenCompose(ignored -> start(expected, java.util.Arrays.asList("host", "--target", "127.0.0.1:" + forwardPort))).whenComplete((event, error) -> {
+            expected.startupFinished = true;
+            client.execute(() -> {
+                if (!current(expected)) return;
+                if (error != null) { fail(expected, error); return; }
+                shareState.ready(expected, event.invite());
+                expected.invite.complete(event.invite());
+            });
+        });
         return expected.invite;
     }
 
     public CompletableFuture<Void> join(Screen parent, String invitation) {
+        final String fullInvitation;
+        try { fullInvitation = InviteCode.toFull(invitation); }
+        catch (IllegalArgumentException invalid) { return failedFuture(invalid); }
         stop();
         Session expected = new Session(++generation, "join", null);
         session = expected;
-        start(expected, java.util.Arrays.asList("join", "--invite", invitation.trim())).whenComplete((event, error) -> client.execute(() -> {
-            if (!current(expected)) return;
-            if (error != null) { fail(expected, error); return; }
-            try {
-                // This check is on the client thread, immediately before changing the connect screen.
-                expected.connecting = true;
-                // Forge/NeoForge clear the previous level synchronously here and emit
-                // LoggingOut even with no player. Only later disconnects close this join.
-                expected.joinLifecycle.beginConnect(() -> GameAdapter.connect(parent, event.address()));
-                expected.connected.complete(null);
-            } catch (RuntimeException failure) { fail(expected, failure); }
-        }));
+        start(expected, java.util.Arrays.asList("join", "--invite", fullInvitation)).whenComplete((event, error) -> {
+            expected.startupFinished = true;
+            client.execute(() -> {
+                if (!current(expected)) return;
+                if (error != null) { fail(expected, error); return; }
+                try {
+                    // This check is on the client thread, immediately before changing the connect screen.
+                    expected.connecting = true;
+                    // Forge/NeoForge clear the previous level synchronously here and emit
+                    // LoggingOut even with no player. Only later disconnects close this join.
+                    expected.joinLifecycle.beginConnect(() -> GameAdapter.connect(parent, event.address()));
+                    expected.connected.complete(null);
+                } catch (RuntimeException failure) { fail(expected, failure); }
+            });
+        });
         return expected.connected;
     }
 
@@ -80,8 +109,8 @@ public final class ScreenState implements AutoCloseable {
                 HelperProcess process = HelperProcess.start(arguments, client.gameDirectory.toPath(), modVersion,
                         development, event -> client.execute(() -> onEvent(expected, event)));
                 synchronized (expected) {
-                    if (expected.cancelled) { process.close(); throw new CancellationException(); }
                     expected.process = process;
+                    if (expected.cancelled) { process.close(); throw new CancellationException(); }
                 }
                 return process;
             } catch (Exception e) { throw new CompletionException(e); }
@@ -90,7 +119,10 @@ public final class ScreenState implements AutoCloseable {
 
     private void onEvent(Session expected, HelperEvent event) {
         if (!current(expected)) return;
-        if (event.stats() != null) expected.status = event.stats();
+        if (event.stats() != null) {
+            expected.status = event.stats();
+            if (expected.host != null) shareState.network(expected, event.stats());
+        }
         if (event.speedtest() != null && expected.testing) {
             for (String line : event.speedtest().lines()) TailcatClient.message(line);
             if (!event.speedtest().state().equals("running")) expected.testing = false;
@@ -117,6 +149,11 @@ public final class ScreenState implements AutoCloseable {
     }
 
     public void tick() {
+        samplePlayers();
+        // close() is asynchronous. Keep STOPPING until every retired host has really exited.
+        stoppingHosts.removeIf(stopped -> stopped.startupFinished
+                && (stopped.process == null || stopped.process.hasExited()));
+        if (stoppingHosts.isEmpty()) shareState.stopped();
         Session expected = session;
         if (expected == null) return;
         if (expected.process != null && !expected.process.isAlive()) {
@@ -131,6 +168,32 @@ public final class ScreenState implements AutoCloseable {
                 || client.screen instanceof MainMenuScreen || client.screen instanceof MultiplayerScreen)) stop();
     }
 
+    private void samplePlayers() {
+        IntegratedServer server = client.getSingleplayerServer();
+        if (playerWorld != server) {
+            playerWorld = server; nextPlayerSample = 0; playerSamplePending = false;
+            shareState.world(server);
+        }
+        long now = System.nanoTime();
+        if (server == null || playerSamplePending || (nextPlayerSample != 0 && now - nextPlayerSample < 0)) return;
+        playerSamplePending = true;
+        nextPlayerSample = now + 1_000_000_000L;
+        try {
+            server.execute(() -> {
+                try {
+                    List<String> names = new java.util.ArrayList<>(java.util.Arrays.asList(server.getPlayerNames()));
+                    client.execute(() -> {
+                        if (playerWorld != server || client.getSingleplayerServer() != server) return;
+                        playerSamplePending = false;
+                        shareState.players(server, names);
+                    });
+                } catch (RuntimeException unavailable) {
+                    client.execute(() -> { if (playerWorld == server) playerSamplePending = false; });
+                }
+            });
+        } catch (RuntimeException shuttingDown) { playerSamplePending = false; }
+    }
+
     /** Loader network disconnect events cover failures before a world ever exists. */
     public void disconnected() { if (session != null && session.mode.equals("join") && session.joinLifecycle.shouldDisconnect()) stop(); }
     public void cancelJoin() { if (session != null && session.mode.equals("join")) stop(); }
@@ -139,6 +202,10 @@ public final class ScreenState implements AutoCloseable {
         session = null;
         generation++;
         if (stopped == null) return;
+        if (stopped.host != null) {
+            shareState.stopping(stopped);
+            stoppingHosts.add(stopped);
+        }
         synchronized (stopped) {
             stopped.cancelled = true;
             if (stopped.process != null) stopped.process.close();
@@ -158,6 +225,7 @@ public final class ScreenState implements AutoCloseable {
     private boolean current(Session expected) { return session == expected && expected.generation == generation && !expected.cancelled; }
     private void fail(Session expected, Throwable error) {
         if (!current(expected)) return;
+        if (expected.host != null) shareState.failed(expected);
         expected.invite.completeExceptionally(error);
         expected.connected.completeExceptionally(error);
         TailcatClient.message("Tailcat：" + ShareScreen.rootMessage(error));
@@ -172,6 +240,7 @@ public final class ScreenState implements AutoCloseable {
         final CompletableFuture<Void> connected = new CompletableFuture<>();
         volatile HelperProcess process;
         volatile boolean cancelled;
+        volatile boolean startupFinished;
         NetworkStatus status;
         boolean connecting, enteredWorld, testing;
         boolean authenticationRequired;
