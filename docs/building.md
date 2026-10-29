@@ -33,3 +33,16 @@ python3 scripts/smoke-network.py --allow-network
 0.3.1起，新启动的mod默认不要求Minecraft正版账号验证。房主可以在分享界面切换；切换会重建邀请并断开已有访客。
 设置仅作用于当前分享的内置服务器；停止分享或启动失败时恢复之前的认证设置。不会修改启动器、全局账号信息或其他服务器的配置。
 关闭验证时，邀请仍是隧道访问凭据，但Minecraft账号身份未经验证；离线身份的UUID／玩家数据可能与在线身份不同。
+
+## 增量添加一个适配器
+
+已有发布包的共享核心、解码器、原生程序和资源均未变化时，可只编译新增模块，再将其合并到已验证通用包。必须提供从发布清单核实的基包SHA-256；旧适配器保持原始字节，新增版本需要实际编译验证。共享核心、启动器或资源改变时拒绝增量合并，需完整重建。
+
+```sh
+./gradlew -PtcTargets=fabric1216 :fabric1216:build :core:test :core:jar :universal-bootstrap:build
+python3 scripts/package-universal.py --targets fabric1216 \
+  --base-universal dist/tailcat-universal-0.3.1.jar \
+  --base-sha256 ac430f1621252f7ba883e3312b0f478e6ebbb32cdd3bbd9fa15f74f21cd839a4
+python3 scripts/verify-artifacts.py
+python3 scripts/prune-caches.py --after-export
+```

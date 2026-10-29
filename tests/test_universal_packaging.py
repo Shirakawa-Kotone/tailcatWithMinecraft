@@ -93,6 +93,102 @@ class UniversalPackagingTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Duplicate'):
             pack.build_universal([artifact, artifact], self.bootstrap, self.output, '0.3.0')
 
+    def base_package(self, artifacts=None):
+        base = self.root / 'base.jar'
+        pack.build_universal(artifacts or [self.artifact('fabric', '1.20.1')],
+                             self.bootstrap, base, '0.3.1')
+        return base, hashlib.sha256(base.read_bytes()).hexdigest()
+
+    def replace_entry(self, path, name, data):
+        with zipfile.ZipFile(path) as jar:
+            entries = {item: jar.read(item) for item in jar.namelist()}
+        if data is None:
+            del entries[name]
+        else:
+            entries[name] = data
+        path.write_bytes(pack.jar_bytes(entries))
+
+    def test_incremental_refuses_wrong_or_missing_base_hash(self):
+        base, digest = self.base_package()
+        artifact = self.artifact('fabric', '1.21.6', 21)
+        for supplied in ('0' * 64, None):
+            with self.subTest(hash=supplied), self.assertRaisesRegex(ValueError, 'SHA-256'):
+                pack.build_universal([artifact], self.bootstrap, self.output, '0.3.2',
+                                     base_universal=base, base_sha256=supplied)
+        self.assertFalse(self.output.exists())
+
+    def test_incremental_preserves_old_adapters_and_shared_resources(self):
+        base, digest = self.base_package([self.artifact('fabric', '1.20.1'),
+                                         self.artifact('forge', '1.20.1')])
+        artifact = self.artifact('fabric', '1.21.6', 21)
+        # Remapping may rewrite the decoder, but incremental output keeps the
+        # verified decoder called by the identical base core.
+        self.replace_entry(artifact.path, 'org/tukaani/xz/XZInputStream.class', klass(52) + b'remapped')
+        pack.build_universal([artifact], self.bootstrap, self.output, '0.3.2',
+                             base_universal=base, base_sha256=digest)
+        with zipfile.ZipFile(base) as old, zipfile.ZipFile(self.output) as new:
+            old_index = json.loads(old.read(pack.INDEX))
+            index = json.loads(new.read(pack.INDEX))
+            self.assertEqual(3, len(index['adapters']))
+            self.assertEqual('0.3.2', index['modVersion'])
+            self.assertEqual({'file': 'base.jar', 'sha256': digest, 'modVersion': '0.3.1',
+                              'adapters': 2}, index['baseUniversal'])
+            self.assertEqual(old_index['adapters'], index['adapters'][:2])
+            for adapter in old_index['adapters']:
+                self.assertEqual(old.read(adapter['resource']), new.read(adapter['resource']))
+            for name in old.namelist():
+                if pack.shared_entry(name):
+                    self.assertEqual(old.read(name), new.read(name), name)
+            fabric = json.loads(new.read('fabric.mod.json'))
+            self.assertEqual(['1.20.1', '1.21.6'], fabric['depends']['minecraft'])
+            self.assertEqual('0.3.2', fabric['version'])
+            self.assertEqual(b'version=0.3.2\nloader=universal\n', new.read('tailcat-build.properties'))
+            self.assertEqual(list(pack.TARGETS), json.loads(new.read('META-INF/tailcat/native-profile.json'))['targets'])
+
+    def test_incremental_refuses_duplicate_pair_in_base_and_new_adapter(self):
+        base, digest = self.base_package()
+        artifact = self.artifact('fabric', '1.20.1')
+        with self.assertRaisesRegex(ValueError, 'Duplicate loader/version'):
+            pack.build_universal([artifact], self.bootstrap, self.output, '0.3.2',
+                                 base_universal=base, base_sha256=digest)
+
+    def test_incremental_refuses_incompatible_shared_resources(self):
+        base_artifact = self.artifact('fabric', '1.20.1')
+        self.replace_entry(base_artifact.path, 'assets/mclink/lang/en_us.json', b'{}')
+        base, digest = self.base_package([base_artifact])
+        for name, data in (
+                ('com/tailscale/mclink/Compatibility.class', klass(52) + b'changed'),
+                ('assets/mclink/native/helpers.tar.xz', b'changed'),
+                ('assets/mclink/lang/en_us.json', b'{"changed":true}'),
+                ('META-INF/licenses/mclink/LICENSE', b'changed'),
+                ('org/tukaani/xz/Unexpected.class', klass(52))):
+            artifact = self.artifact('fabric', '1.21.6', 21)
+            self.replace_entry(artifact.path, 'assets/mclink/lang/en_us.json', b'{}')
+            self.replace_entry(artifact.path, name, data)
+            with self.subTest(entry=name), self.assertRaisesRegex(ValueError, 'shared|codec'):
+                pack.build_universal([artifact], self.bootstrap, self.output, '0.3.2',
+                                     base_universal=base, base_sha256=digest)
+
+    def test_incremental_refuses_changed_canonical_core(self):
+        base, digest = self.base_package()
+        canonical = self.root / 'core.jar'
+        with zipfile.ZipFile(base) as jar:
+            entries = {name: jar.read(name) for name in jar.namelist() if pack.is_core(name)}
+        entries['com/tailscale/mclink/Compatibility.class'] += b'changed'
+        canonical.write_bytes(pack.jar_bytes(entries))
+        with self.assertRaisesRegex(ValueError, 'shared core'):
+            pack.build_universal([self.artifact('fabric', '1.21.6', 21)], self.bootstrap,
+                                 self.output, '0.3.2', core_jar=canonical,
+                                 base_universal=base, base_sha256=digest)
+
+    def test_incremental_refuses_corrupted_base_nested_adapter(self):
+        base, _ = self.base_package()
+        self.replace_entry(base, 'META-INF/tailcat/adapters/fabric1201.jar', b'corrupt')
+        digest = hashlib.sha256(base.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'adapter.*SHA-256'):
+            pack.build_universal([self.artifact('fabric', '1.21.6', 21)], self.bootstrap,
+                                 self.output, '0.3.2', base_universal=base, base_sha256=digest)
+
     def test_refuses_core_that_cannot_run_on_java8(self):
         artifact = self.artifact('fabric', '1.20.1')
         with zipfile.ZipFile(artifact.path, 'a') as z:

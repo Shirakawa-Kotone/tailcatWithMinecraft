@@ -7,7 +7,13 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
 }
-java { withSourcesJar(); sourceCompatibility = JavaVersion.VERSION_1_8; targetCompatibility = JavaVersion.VERSION_1_8 }
+java {
+    // Keep canonical Java8 output stable across the Gradle9/JDK25 and FG6/JDK21 launchers.
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 tasks.named('compileJava', JavaCompile) { options.release = 8 }
 tasks.named('compileTestJava', JavaCompile) { options.release = 8 }

@@ -1,3 +1,29 @@
+# 0.3.2：Fabric 1.21.6 兼容修复 — 2026-10-29
+
+用户在真实1.21.6实例报告0.3.1版本约束拒绝加载。本轮新增实际1.21.6适配，不扩大其他未编译版本的范围。
+
+- `fabric1216:build`通过，Fabric API固定0.128.2+1.21.6，Java21；编译确认WorldVersion使用`name()`而非`getName()`。
+- 共享核心39项、启动器11项通过；Python增量完整性回归18项通过。
+- 真实1.21.6/Fabric0.19.3隔离客户端启动：识别`tailcat0.3.2`，进入渲染与资源加载，无版本不兼容或入口链接异常。没有修改用户实例、账号或存档。
+- 另使用用户现有Litematica/MaLiLib/MagicLib及提取的正确Printer单版本包，在隔离1.21.6客户端同时加载Tailcat0.3.2与Printer成功，进入资源渲染；未出现原有的两条版本不兼容。非整个用户整合包的完整功能验收。
+- 七个发布包全部通过哈希、元数据、Java8外层、许可证、原生程序与体积校验；新索引38个适配器，旧37个嵌套JAR逐字节不变。
+- 基包来自已发布0.3.1，SHA-256与GitHub资产摘要核对一致：`ac430f1621252f7ba883e3312b0f478e6ebbb32cdd3bbd9fa15f74f21cd839a4`。核心固定JDK21编译，12个核心class与基包逐字节一致。
+- 实际分享／加入世界、双机UDP切换仍需验收；此次真实启动通过不扩展为所有版本和全部游戏功能已实机验证。
+
+| 文件 | 字节 |
+| --- | ---: |
+| tailcat-universal-0.3.2.jar | 18663829 |
+| tailcat-universal-0.3.2-darwin-amd64.jar | 6886501 |
+| tailcat-universal-0.3.2-darwin-arm64.jar | 6223015 |
+| tailcat-universal-0.3.2-linux-amd64.jar | 6992163 |
+| tailcat-universal-0.3.2-linux-arm64.jar | 6155503 |
+| tailcat-universal-0.3.2-windows-amd64.jar | 6949512 |
+| tailcat-universal-0.3.2-windows-arm64.jar | 6068375 |
+
+发布时另附build-matrix.json、SHA256SUMS。本地构建，GitHub Actions保持关闭。
+
+---
+
 # 0.3.1 验证 — 2026-10-29
 
 本机 macOS arm64 编译并发布，未使用GitHub Actions。目标发布页： https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/tag/v0.3.1 。

@@ -1,0 +1,18 @@
+ext.minecraftVersion = '1.21.6'
+ext.javaVersion = 21
+ext.versionDirectory = '1211'
+ext.loaderName = 'fabric'
+ext.fabricVersion = '0.128.2+1.21.6'
+ext.fabricLoaderVersion = '0.20.1'
+// Pins from the official 0.128.2+1.21.6 aggregate POM; avoids a separate
+// configuration-time URL download just to discover these coordinates.
+ext.fabricModuleVersions = [
+    'fabric-api-base': '0.4.64+9ec45cd896',
+    'fabric-command-api-v2': '2.2.53+946bf4c396',
+    'fabric-lifecycle-events-v1': '2.6.3+db4dfd8596',
+    'fabric-networking-api-v1': '5.0.1+946bf4c396',
+    'fabric-screen-api-v1': '2.0.51+946bf4c396'
+]
+ext.sourceFamily = 'common12111'
+ext.loaderFamily = 'fabric'
+apply from: rootProject.file('platforms/fabric.gradle')

@@ -117,8 +117,65 @@ def loader_metadata(loader, adapters, mod_version):
             f'versionRange="{ranges}"\nordering="NONE"\nside="CLIENT"\n').encode()
 
 
-def build_universal(artifacts, bootstrap, output, mod_version, core_jar=None):
+def read_base_universal(path, expected_sha256):
+    """Read an explicitly trusted release, checking all indexed adapter bytes."""
+    if not expected_sha256 or not re.fullmatch(r'[0-9a-fA-F]{64}', expected_sha256):
+        raise ValueError('Base universal requires a release SHA-256')
+    path = Path(path)
+    data = path.read_bytes()
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != expected_sha256.lower():
+        raise ValueError('Base universal SHA-256 mismatch: ' + str(path))
+    with zipfile.ZipFile(io.BytesIO(data)) as jar:
+        names = [item.filename for item in jar.infolist() if not item.is_dir()]
+        if len(names) != len(set(names)):
+            raise ValueError('Duplicate base archive entry')
+        entries = {name: jar.read(name) for name in names}
+    index = json.loads(entries[INDEX])
+    if index.get('format') != 1 or not index.get('modVersion') or not index.get('adapters'):
+        raise ValueError('Invalid base adapter index')
+    pairs, ids, resources = set(), set(), set()
+    for adapter in index['adapters']:
+        identity, loader, versions = adapter['id'], adapter['loader'], adapter['minecraft']
+        if loader not in ENTRYPOINTS or not re.fullmatch(r'[A-Za-z0-9_-]+', identity) \
+                or not isinstance(versions, list) or not versions \
+                or any(not isinstance(value, str) or not value for value in versions):
+            raise ValueError('Invalid base adapter declaration')
+        resource = 'META-INF/tailcat/adapters/' + identity + '.jar'
+        if identity in ids or resource in resources or adapter['resource'] != resource:
+            raise ValueError('Duplicate or invalid base adapter resource: ' + identity)
+        if adapter['entrypoint'] != 'com.tailscale.mclink.' + ENTRYPOINTS[loader]:
+            raise ValueError('Invalid base adapter entrypoint: ' + identity)
+        for minecraft in versions:
+            pair = (loader, minecraft)
+            if pair in pairs:
+                raise ValueError('Duplicate loader/version adapter: ' + str(pair))
+            pairs.add(pair)
+        nested = entries.get(resource)
+        if nested is None or hashlib.sha256(nested).hexdigest() != adapter['sha256']:
+            raise ValueError('Base adapter SHA-256 mismatch: ' + identity)
+        ids.add(identity)
+        resources.add(resource)
+    actual = {name for name in entries if name.startswith('META-INF/tailcat/adapters/')}
+    if actual != resources:
+        raise ValueError('Unindexed base adapter resource')
+    profile = json.loads(entries['META-INF/tailcat/native-profile.json'])
+    if profile.get('targets') != list(TARGETS) or profile.get('offline') is not True:
+        raise ValueError('Base universal must contain all six offline native targets')
+    provenance = {'file': path.name, 'sha256': digest, 'modVersion': index['modVersion'],
+                  'adapters': len(index['adapters'])}
+    return entries, index['adapters'], pairs, provenance
+
+
+def build_universal(artifacts, bootstrap, output, mod_version, core_jar=None,
+                    base_universal=None, base_sha256=None):
     shared, adapters, seen = {}, [], set()
+    base_entries, provenance = {}, None
+    if base_universal is not None:
+        base_entries, adapters, seen, provenance = read_base_universal(base_universal, base_sha256)
+        shared.update(base_entries)
+    elif base_sha256 is not None:
+        raise ValueError('Base SHA-256 requires --base-universal')
     canonical = {}
     if core_jar is not None:
         with zipfile.ZipFile(core_jar) as jar:
@@ -128,19 +185,30 @@ def build_universal(artifacts, bootstrap, output, mod_version, core_jar=None):
         for name, data in canonical.items():
             if class_major(data) > 52:
                 raise ValueError('Shared core must run on Java 8: ' + name)
+        if base_entries and canonical != {name: data for name, data in base_entries.items() if is_core(name)}:
+            raise ValueError('Mismatched shared core; use the verified base canonical core or rebuild all adapters')
         shared.update(canonical)
+    base_shared_names = {name for name in base_entries if shared_entry(name)}
+    adapter_ids = {item['id'] for item in adapters}
+    supplied = False
     for artifact in artifacts:
+        supplied = True
         key = (artifact.loader, artifact.minecraft)
         if key in seen:
             raise ValueError('Duplicate loader/version adapter: ' + str(key))
         seen.add(key)
+        if artifact.id in adapter_ids:
+            raise ValueError('Duplicate adapter id: ' + artifact.id)
+        adapter_ids.add(artifact.id)
         adapter_classes = {}
+        artifact_shared_names = set()
         with zipfile.ZipFile(artifact.path) as jar:
             for item in jar.infolist():
                 name = item.filename
                 if item.is_dir():
                     continue
                 if shared_entry(name):
+                    artifact_shared_names.add(name)
                     data = jar.read(name)
                     if is_core(name) and class_major(data) > 52:
                         raise ValueError('Shared core must run on Java 8: ' + name)
@@ -158,6 +226,15 @@ def build_universal(artifacts, bootstrap, output, mod_version, core_jar=None):
                     shared[name] = data
                 elif name.startswith('com/tailscale/mclink/') and name.endswith('.class'):
                     adapter_classes[name] = jar.read(name)
+        if base_entries:
+            if artifact_shared_names != base_shared_names:
+                changed = sorted(artifact_shared_names ^ base_shared_names)
+                raise ValueError('Mismatched shared resource/codec inventory: ' + ', '.join(changed))
+            # Codec bytes from new remappers are never used. The byte-identical
+            # base core keeps calling the complete, previously verified decoder.
+            # A new adapter directly using decoder APIs needs full verification.
+            if any(b'org/tukaani/xz/' in data for data in adapter_classes.values()):
+                raise ValueError('New adapter directly references shared codec; rebuild all adapters')
         entrypoint = 'com.tailscale.mclink.' + ENTRYPOINTS[artifact.loader]
         if entrypoint.replace('.', '/') + '.class' not in adapter_classes:
             raise ValueError('Missing adapter entrypoint: ' + artifact.id)
@@ -167,21 +244,29 @@ def build_universal(artifacts, bootstrap, output, mod_version, core_jar=None):
         adapters.append({'id': artifact.id, 'loader': artifact.loader, 'minecraft': [artifact.minecraft],
                          'entrypoint': entrypoint, 'resource': resource,
                          'sha256': hashlib.sha256(nested).hexdigest(), 'java': artifact.java})
-    if not adapters:
+    if not supplied:
         raise ValueError('No adapters supplied')
+    bootstrap_entries = {}
     with zipfile.ZipFile(bootstrap) as jar:
         for name in jar.namelist():
             if name.startswith('com/tailscale/mclink/bootstrap/') and name.endswith('.class'):
                 data = jar.read(name)
                 if class_major(data) > 52:
                     raise ValueError('Universal bootstrap must run on Java 8: ' + name)
+                bootstrap_entries[name] = data
                 shared[name] = data
+    if base_entries and bootstrap_entries != {name: data for name, data in base_entries.items()
+                                            if name.startswith('com/tailscale/mclink/bootstrap/') and name.endswith('.class')}:
+        raise ValueError('Mismatched shared bootstrap; rebuild all adapters')
     for cls in ('FabricBootstrap', 'ForgeBootstrap', 'NeoForgeBootstrap', 'BootstrapRuntime'):
         if 'com/tailscale/mclink/bootstrap/' + cls + '.class' not in shared:
             raise ValueError('Missing universal bootstrap class: ' + cls)
     for loader, path in (('fabric', 'fabric.mod.json'), ('forge', 'META-INF/mods.toml'), ('neoforge', 'META-INF/neoforge.mods.toml')):
         shared[path] = loader_metadata(loader, adapters, mod_version)
-    shared[INDEX] = json.dumps({'format': 1, 'modVersion': mod_version, 'adapters': adapters}, indent=2).encode()
+    index = {'format': 1, 'modVersion': mod_version, 'adapters': adapters}
+    if provenance is not None:
+        index['baseUniversal'] = provenance
+    shared[INDEX] = json.dumps(index, indent=2).encode()
     shared['tailcat-build.properties'] = f'version={mod_version}\nloader=universal\n'.encode()
     shared['META-INF/MANIFEST.MF'] = f'Manifest-Version: 1.0\nFMLModType: MOD\nImplementation-Version: {mod_version}\n\n'.encode()
     shared['META-INF/tailcat/native-profile.json'] = json.dumps({'targets': list(TARGETS), 'offline': True}).encode()
@@ -234,18 +319,32 @@ def main():
     parser.add_argument('--output', type=Path, default=ROOT / 'dist')
     parser.add_argument('--no-slim', action='store_true')
     parser.add_argument('--catalog', action='store_true')
+    parser.add_argument('--base-universal', type=Path, help='verified previous universal release to preserve')
+    parser.add_argument('--base-sha256', help='SHA-256 from the base release checksum manifest (required for reuse)')
+    parser.add_argument('--core-jar', type=Path, help='canonical Java 8 core archive; may be the verified base universal')
     args = parser.parse_args()
     if args.catalog:
         print(json.dumps(catalog(), indent=2))
         return 0
+    if args.base_universal is not None and (not args.base_sha256 or not args.targets):
+        parser.error('--base-universal requires --base-sha256 and explicit --targets')
+    if args.base_sha256 and args.base_universal is None:
+        parser.error('--base-sha256 requires --base-universal')
     bootstrap = ROOT / 'universal/build/libs' / f'tailcat-universal-bootstrap-{version()}.jar'
     output = args.output / f'tailcat-universal-{version()}.jar'
     artifacts = current_artifacts(args.targets.split(',') if args.targets else None)
-    core = ROOT / 'core/build/libs' / f'core-{version()}.jar'
-    build_universal(artifacts, bootstrap, output, version(), core_jar=core)
+    core = args.core_jar or ROOT / 'core/build/libs' / f'core-{version()}.jar'
+    build_universal(artifacts, bootstrap, output, version(), core_jar=core,
+                    base_universal=args.base_universal, base_sha256=args.base_sha256)
     generated = [output] + ([] if args.no_slim else build_slim_profiles(output, args.output))
-    report = {'version': version(), 'adapters': [{'id': a.id, 'minecraft': a.minecraft, 'loader': a.loader, 'java': a.java} for a in artifacts],
+    with zipfile.ZipFile(output) as jar:
+        index = json.loads(jar.read(INDEX))
+    report = {'version': version(), 'adapters': [
+                  {'id': a['id'], 'minecraft': a['minecraft'][0] if len(a['minecraft']) == 1 else a['minecraft'],
+                   'loader': a['loader'], 'java': a['java']} for a in index['adapters']],
               'artifacts': [{'file': p.name, 'bytes': p.stat().st_size, 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()} for p in generated]}
+    if 'baseUniversal' in index:
+        report['baseUniversal'] = index['baseUniversal']
     (args.output / 'build-matrix.json').write_text(json.dumps(report, indent=2) + '\n')
     for item in report['artifacts']:
         print(item['file'], item['bytes'], 'bytes')

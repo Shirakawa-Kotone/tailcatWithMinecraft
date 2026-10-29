@@ -8,7 +8,7 @@
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.16.5–26.3-67d9a2)](docs/version-matrix.md)
 [![Loaders](https://img.shields.io/badge/Loaders-Fabric_·_Forge_·_NeoForge-a48aff)](docs/version-matrix.md)
-[![Version](https://img.shields.io/badge/version-0.3.1_beta-68d7ef)](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/tag/v0.3.1)
+[![Version](https://img.shields.io/badge/version-0.3.2_beta-68d7ef)](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/tag/v0.3.2)
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-lightgrey)](LICENSE)
 
 内置 [Tailcat](https://github.com/tailscale/tailcat)，无需额外安装网络程序或设置端口转发。
@@ -22,13 +22,13 @@
 
 | 你的设备 | 处理器 | 下载 |
 | --- | --- | --- |
-| 不确定／跨平台整合包 | 全部支持的平台 | [全平台通用包](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.1/tailcat-universal-0.3.1.jar) |
-| Windows 电脑 | Intel／AMD（x64） | [Windows x64](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.1/tailcat-universal-0.3.1-windows-amd64.jar) |
-| Windows ARM 电脑 | ARM64 | [Windows ARM64](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.1/tailcat-universal-0.3.1-windows-arm64.jar) |
-| Mac | Apple 芯片（M 系列） | [macOS Apple Silicon](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.1/tailcat-universal-0.3.1-darwin-arm64.jar) |
-| Mac | Intel | [macOS Intel](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.1/tailcat-universal-0.3.1-darwin-amd64.jar) |
-| Linux 电脑 | Intel／AMD（x64） | [Linux x64](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.1/tailcat-universal-0.3.1-linux-amd64.jar) |
-| Linux ARM 设备 | ARM64 | [Linux ARM64](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.1/tailcat-universal-0.3.1-linux-arm64.jar) |
+| 不确定／跨平台整合包 | 全部支持的平台 | [全平台通用包](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.2/tailcat-universal-0.3.2.jar) |
+| Windows 电脑 | Intel／AMD（x64） | [Windows x64](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.2/tailcat-universal-0.3.2-windows-amd64.jar) |
+| Windows ARM 电脑 | ARM64 | [Windows ARM64](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.2/tailcat-universal-0.3.2-windows-arm64.jar) |
+| Mac | Apple 芯片（M 系列） | [macOS Apple Silicon](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.2/tailcat-universal-0.3.2-darwin-arm64.jar) |
+| Mac | Intel | [macOS Intel](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.2/tailcat-universal-0.3.2-darwin-amd64.jar) |
+| Linux 电脑 | Intel／AMD（x64） | [Linux x64](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.2/tailcat-universal-0.3.2-linux-amd64.jar) |
+| Linux ARM 设备 | ARM64 | [Linux ARM64](https://github.com/Shirakawa-Kotone/tailcatWithMinecraft/releases/download/v0.3.2/tailcat-universal-0.3.2-linux-arm64.jar) |
 
 将选中的 JAR 放入游戏实例的 `mods` 文件夹，房主和朋友都需要安装。Fabric 还需安装与游戏版本匹配的 Fabric API。
 
@@ -48,16 +48,17 @@
 
 ## 🧩 支持版本
 
-支持 **Fabric、Forge、NeoForge**，覆盖下列 14 个版本、37 个组合：
+支持 **Fabric、Forge、NeoForge**，覆盖下列 15 个版本、38 个组合：
 
 | 游戏版本 | Fabric | Forge | NeoForge |
 | --- | :---: | :---: | :---: |
 | 1.16.5、1.17.1、1.18.2、1.19.2、1.19.4 | ✓ | ✓ | — |
 | 1.20.1、1.20.4、1.20.6 | ✓ | ✓ | ✓ |
 | 1.21.1、1.21.4、1.21.11 | ✓ | ✓ | ✓ |
+| 1.21.6 | ✓ | — | — |
 | 26.1.2、26.2、26.3 | ✓ | ✓ | ✓ |
 
-版本号需精确匹配。[详细矩阵 →](docs/version-matrix.md)
+版本号需精确匹配；`—` 表示尚未提供该组合。[详细矩阵 →](docs/version-matrix.md)
 
 ## 📡 连接状态与测速
 

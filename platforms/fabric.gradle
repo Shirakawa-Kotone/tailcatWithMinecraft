@@ -25,7 +25,10 @@ dependencies {
     // Its nested modules are already present through the compile dependencies.
     add(unobfuscated ? 'runtimeOnly' : 'modRuntimeOnly', "net.fabricmc.fabric-api:fabric-api:${project.fabricVersion}") { transitive = false }
     apiModules.each { module ->
-        add(unobfuscated ? 'implementation' : 'modImplementation', fabricApi.module(module, project.fabricVersion))
+        def pinned = project.findProperty('fabricModuleVersions')?.get(module)
+        add(unobfuscated ? 'implementation' : 'modImplementation', pinned
+                ? "net.fabricmc.fabric-api:${module}:${pinned}"
+                : fabricApi.module(module, project.fabricVersion))
     }
 }
 // Fabric's Maven hosts Fabric artifacts. Let vanilla libraries resolve from the
