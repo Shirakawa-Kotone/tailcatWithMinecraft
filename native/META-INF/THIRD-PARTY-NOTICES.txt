@@ -1,0 +1,1 @@
+Tailcat Minecraft includes software from tailscale/tailcat-for-minecraft (BSD-3-Clause), Tailcat, Tailscale, the Go standard library, and the Go modules listed in licenses/go-dependencies/INDEX.json. Original license and notice texts are included under META-INF/licenses/. Minecraft and loader APIs are provided by the player runtime.

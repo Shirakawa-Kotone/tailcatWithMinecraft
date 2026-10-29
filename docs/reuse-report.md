@@ -25,4 +25,12 @@ Evidence: upstream README and LICENSE inspected locally after clone; project ind
 
 ## Required upstream follow-up
 
+## Universal/range extension (2026-10-29)
+
+Retain the existing Tailcat implementation and the verified version adapters. Reuse pure-Java `org.tukaani:xz:1.12` (public-domain license) for a solid tar.xz containing the six native executables; measured all-platform payload is about17MiB, versus43MiB for separate ZIP members. No native packer or player-time download is required.
+
+The universal package adds small Java8 loader entrypoints and standard-library URLClassLoader isolation of the selected nested adapter. Existing loader-specific remapped outputs are preserved; no source-level reimplementation of Minecraft/loader behavior and no assumption that Forge/Fabric mapping namespaces are interchangeable. SDK interface/annotation declarations are compile-only and excluded from shipped classes. All supported combinations must appear in the verified build index; unavailable loaders are N/A.
+
+For the10MB preference, additionally offer one-platform offline native profiles rather than silently removing platforms from the universal package. Universal distribution is guarded at50,000,000 bytes.
+
 Native signing/notarization before public release; complete Go dependency notices; multiple peers, authentication and direct/DERP behavior on separate machines. Native helpers must be bundled in normal artifacts, not fetched at player runtime.

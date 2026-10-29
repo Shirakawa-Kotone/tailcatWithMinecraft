@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "tailcat",
+  "version": "${version}",
+  "name": "Tailcat for Minecraft",
+  "description": "Share Minecraft worlds through bundled Tailcat userspace WireGuard tunnels.",
+  "authors": ["Tailscale", "Tailcat Minecraft contributors"],
+  "license": "BSD-3-Clause",
+  "environment": "client",
+  "entrypoints": { "client": ["com.tailscale.mclink.TailcatFabric"] },
+  "depends": { "fabricloader": ">=0.16.10", "minecraft": "${minecraft_version}", "java": ">=${java_version}", "fabric": "*" }
+}

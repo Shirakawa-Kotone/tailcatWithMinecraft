@@ -1,0 +1,12 @@
+plugins { id 'net.neoforged.moddev.legacyforge' }
+ext.minecraftVersion = '1.20.1'
+ext.javaVersion = 17
+ext.versionDirectory = '1201'
+ext.loaderName = 'forge'
+ext.loaderFamily = 'forge1201'
+apply from: rootProject.file('platforms/shared.gradle')
+legacyForge {
+    enable { forgeVersion = '1.20.1-47.4.0'; disableRecompilation = true }
+    runs { client { client() } }
+    mods { tailcat { sourceSet sourceSets.main } }
+}

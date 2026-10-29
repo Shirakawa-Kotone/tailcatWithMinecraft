@@ -1,0 +1,40 @@
+def unobfuscated = project.findProperty('unobfuscated') == true || project.findProperty('unobfuscated') == 'true'
+if (unobfuscated) {
+    // 26.1+ ships official names already applied; this plugin id performs no remap.
+    apply plugin: 'net.fabricmc.fabric-loom'
+} else {
+    apply plugin: 'fabric-loom'
+}
+apply from: rootProject.file('platforms/shared.gradle')
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraftVersion}"
+    if (unobfuscated) {
+        implementation "net.fabricmc:fabric-loader:${project.fabricLoaderVersion}"
+    } else {
+        mappings loom.officialMojangMappings()
+        modImplementation "net.fabricmc:fabric-loader:${project.fabricLoaderVersion}"
+    }
+}
+
+// Compile against the APIs this client actually uses. The installed Fabric API
+// aggregate still supplies these modules at runtime through fabric.mod.json.
+def commandApi = project.loaderFamily == 'legacyFabric' ? 'fabric-command-api-v1' : 'fabric-command-api-v2'
+def apiModules = ['fabric-api-base', 'fabric-lifecycle-events-v1', 'fabric-networking-api-v1', 'fabric-screen-api-v1', commandApi]
+dependencies {
+    // The aggregate's id is required by loader metadata during runClient too.
+    // Its nested modules are already present through the compile dependencies.
+    add(unobfuscated ? 'runtimeOnly' : 'modRuntimeOnly', "net.fabricmc.fabric-api:fabric-api:${project.fabricVersion}") { transitive = false }
+    apiModules.each { module ->
+        add(unobfuscated ? 'implementation' : 'modImplementation', fabricApi.module(module, project.fabricVersion))
+    }
+}
+// Fabric's Maven hosts Fabric artifacts. Let vanilla libraries resolve from the
+// Mojang/Maven Central repositories instead of probing this mirror first.
+repositories.configureEach { repository ->
+    if (repository instanceof MavenArtifactRepository && repository.url.host == 'maven.fabricmc.net') {
+        repository.content {
+            includeGroupByRegex 'net\\.fabricmc(\\..*)?'
+            includeGroup 'io.github.llamalad7'
+        }
+    }
+}

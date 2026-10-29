@@ -3,7 +3,7 @@ module github.com/tailscale/mclink/helper
 go 1.26.5
 
 require (
-	github.com/tailscale/tailcat v0.0.0-20260822200224-dd31c4938296
+	github.com/tailscale/tailcat v0.0.0-20260826135832-fe50bc39d802
 	tailscale.com v1.101.0-pre.0.20260720143344-246c82a658b3
 )
 
@@ -53,3 +53,5 @@ require (
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect
 	gvisor.dev/gvisor v0.0.0-20260224225140-573d5e7127a8 // indirect
 )
+
+replace github.com/tailscale/tailcat => ./third_party/tailcat

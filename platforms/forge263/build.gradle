@@ -1,0 +1,17 @@
+plugins { id 'net.minecraftforge.gradle' version '7.0.40' }
+ext.minecraftVersion = '26.3'
+ext.javaVersion = 25
+ext.versionDirectory = '263'
+ext.loaderName = 'forge'
+ext.loaderFamily = 'forge263'
+ext.sourceFamily = 'common263'
+apply from: rootProject.file('platforms/shared.gradle')
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+}
+dependencies {
+    implementation minecraft.dependency('net.minecraftforge:forge:26.3-66.1.0')
+    annotationProcessor 'net.minecraftforge:eventbus-validator:7.0.6'
+}

@@ -1,0 +1,14 @@
+plugins { id 'net.minecraftforge.gradle' version '7.0.40' }
+ext.minecraftVersion = '1.21.1'
+ext.javaVersion = 21
+ext.versionDirectory = '1211'
+ext.loaderName = 'forge'
+ext.loaderFamily = 'forge1211'
+ext.sourceFamily = 'common'
+apply from: rootProject.file('platforms/shared.gradle')
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+}
+dependencies { implementation minecraft.dependency('net.minecraftforge:forge:1.21.1-52.1.20') }

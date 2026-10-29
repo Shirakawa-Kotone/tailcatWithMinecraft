@@ -1,0 +1,15 @@
+{
+  "mclink.share": "Share with Tailcat",
+  "mclink.join": "Connect with Tailcat",
+  "mclink.invite": "Tailcat Invitation",
+  "mclink.invite_hint": "Paste an mcl1_ Tailcat invitation",
+  "mclink.starting": "Starting secure tunnel…",
+  "mclink.sharing": "World is shared remotely",
+  "mclink.copy": "Copy Invitation",
+  "mclink.stop": "Stop Sharing",
+  "mclink.connect": "Connect",
+  "mclink.authentication_on": "Minecraft account verification: ON",
+  "mclink.authentication_off": "Minecraft account verification: OFF",
+  "mclink.authentication_rebuild": "Changing this creates a new invitation",
+  "mclink.authentication_disconnect": "and disconnects current guests."
+}

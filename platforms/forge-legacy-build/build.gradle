@@ -1,0 +1,5 @@
+plugins { id 'base'; id 'net.minecraftforge.gradle' version '6.0.42' apply false }
+def metadata = new Properties()
+file('gradle.properties').withInputStream { metadata.load(it) }
+allprojects { version = metadata.mod_version; group = metadata.maven_group }
+tasks.named('build') { dependsOn subprojects.collect { "${it.path}:build" } }

@@ -1,8 +1,25 @@
 pluginManagement {
     repositories {
+        mavenCentral()
         maven { url = 'https://maven.fabricmc.net/' }
+        maven { url = 'https://maven.neoforged.net/releases' }
+        maven { url = 'https://maven.minecraftforge.net' }
         gradlePluginPortal()
     }
 }
 rootProject.name = 'tailcat-for-minecraft'
-include 'mod'
+include 'core'
+include 'universal-bootstrap'
+project(':universal-bootstrap').projectDir = file('universal')
+def variants = file('platforms').listFiles().findAll { directory ->
+    directory.isDirectory() && new File(directory, 'build.gradle').isFile()
+            && !new File(directory, '.standalone-build').isFile()
+}.collect { it.name }.sort()
+def requested = providers.gradleProperty('tcTargets').orNull
+def selected = requested == null || requested == 'all' ? variants :
+        requested == 'core' ? [] : requested.split(',').collect { it.trim() }
+selected.each { variant ->
+    if (!variants.contains(variant)) throw new GradleException("Unknown root-build target: ${variant}")
+    include variant
+    project(":${variant}").projectDir = file("platforms/${variant}")
+}

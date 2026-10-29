@@ -1,0 +1,21 @@
+modLoader="javafml"
+loaderVersion="[50,)"
+license="BSD-3-Clause"
+[[mods]]
+modId="tailcat"
+version="${version}"
+displayName="Tailcat for Minecraft"
+displayTest="IGNORE_ALL_VERSION"
+description='''Share Minecraft worlds through bundled Tailcat userspace WireGuard tunnels.'''
+[[dependencies.tailcat]]
+modId="forge"
+mandatory=true
+versionRange="[50.2.14,)"
+ordering="NONE"
+side="CLIENT"
+[[dependencies.tailcat]]
+modId="minecraft"
+mandatory=true
+versionRange="[${minecraft_version}]"
+ordering="NONE"
+side="CLIENT"

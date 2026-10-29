@@ -1,0 +1,12 @@
+plugins { id 'net.neoforged.moddev' }
+ext.minecraftVersion = '1.21.1'
+ext.javaVersion = 21
+ext.versionDirectory = '1211'
+ext.loaderName = 'neoforge'
+ext.loaderFamily = 'neoforge1211'
+apply from: rootProject.file('platforms/shared.gradle')
+neoForge {
+    enable { version = '21.1.172'; disableRecompilation = true }
+    runs { client { client() } }
+    mods { tailcat { sourceSet sourceSets.main } }
+}

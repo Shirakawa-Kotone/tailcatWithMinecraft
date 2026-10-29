@@ -1,54 +1,64 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+source "$ROOT/scripts/go-env.sh"
+RES="$ROOT/native/assets/mclink/native"
 OUT="$ROOT/helper/bin"
-RES="$ROOT/mod/src/main/resources/assets/mclink/native"
-TSGO_REV=63ae404c8203317fd3c82d972e5dc8f0fcb425cb
+VERSION=${TC_HELPER_VERSION:-0.2.0}
 mkdir -p "$OUT" "$RES"
-
-export CGO_ENABLED=0
-export GOMAXPROCS=${GOMAXPROCS:-2}
-
-host_os=$(uname -s | tr '[:upper:]' '[:lower:]')
-host_arch=$(uname -m)
-case "$host_arch" in
-  x86_64|amd64) host_arch=amd64 ;;
-  arm64|aarch64) host_arch=arm64 ;;
-  *) echo "unsupported build host architecture: $host_arch" >&2; exit 1 ;;
-esac
-[[ "$host_os" == darwin || "$host_os" == linux ]] || { echo "unsupported build host OS: $host_os" >&2; exit 1; }
-toolchain="${XDG_CACHE_HOME:-$HOME/.cache}/mclink/tsgo/$TSGO_REV"
-if [[ ! -x "$toolchain/bin/go" ]]; then
-  archive="$toolchain.tar.gz"
-  mkdir -p "$toolchain"
-  curl --retry 3 -fsSL "https://github.com/tailscale/go/releases/download/build-$TSGO_REV/$host_os-$host_arch.tar.gz" -o "$archive"
-  tar -xzf "$archive" -C "$toolchain" --strip-components=1
-  rm -f "$archive"
-fi
-GO="$toolchain/bin/go"
-[[ $($GO env GOVERSION) == go1.26.5 ]] || { echo "downloaded Tailscale Go version mismatch" >&2; exit 1; }
-export GOROOT="$toolchain"
-# Never reuse packages compiled by a different patched Tailscale Go revision.
-export GOCACHE="${XDG_CACHE_HOME:-$HOME/.cache}/mclink/go-build/$TSGO_REV"
-mkdir -p "$GOCACHE"
-
-for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
-  os=${target%/*}
-  arch=${target#*/}
-  dir="$os-$arch"
+# Override for local iteration; release builds use all six targets.
+TARGETS=${TC_NATIVE_TARGETS:-'windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64'}
+for target in $TARGETS; do
+  case "$target" in
+    windows/amd64|windows/arm64|darwin/amd64|darwin/arm64|linux/amd64|linux/arm64) ;;
+    *) echo "Unsupported target: $target" >&2; exit 1 ;;
+  esac
+  target_os=${target%/*}
+  target_arch=${target#*/}
+  dir="$target_os-$target_arch"
   name=mclink-helper
-  [[ "$os" == windows ]] && name=mclink-helper.exe
-  mkdir -p "$OUT/$dir" "$RES/$dir"
-  (cd "$ROOT/helper" && GOOS="$os" GOARCH="$arch" "$GO" build -p=1 -buildvcs=false -tags=ts_omit_ssh -trimpath -ldflags='-s -w' -o "$OUT/$dir/$name" ./cmd/mclink-helper)
-  cp "$OUT/$dir/$name" "$RES/$dir/$name"
+  [[ "$target_os" == windows ]] && name=mclink-helper.exe
+  mkdir -p "$OUT/$dir"
+  echo "Building Tailcat helper $VERSION for $target"
+  (cd "$ROOT/helper" && GOOS="$target_os" GOARCH="$target_arch" "$TC_GO" build -p=2 -buildvcs=false -tags=ts_omit_ssh -trimpath \
+    -ldflags="-s -w -X main.helperVersion=$VERSION" -o "$OUT/$dir/$name" ./cmd/mclink-helper)
 done
-
-python3 - "$RES" <<'PY'
-import hashlib, json, pathlib, sys
-root = pathlib.Path(sys.argv[1])
-checksums = {}
-for p in sorted(root.glob("*/mclink-helper*")):
-    checksums[p.relative_to(root).as_posix()] = hashlib.sha256(p.read_bytes()).hexdigest()
-(root / "checksums.json").write_text(json.dumps(checksums, indent=2) + "\n")
+# Every helper is an ~19 MiB Go binary. Six of them stored as loose jar entries
+# cost ~43 MiB because deflate cannot see across file boundaries; a single solid
+# archive lets LZMA reuse the shared runtime across all six (~17 MiB). Keep the
+# SHA-256 manifest for the uncompressed binaries so extraction still verifies
+# what is actually executed.
+python3 - "$OUT" "$RES" <<'PY'
+import hashlib, io, json, lzma, pathlib, shutil, sys, tarfile
+out = pathlib.Path(sys.argv[1])
+res = pathlib.Path(sys.argv[2])
+targets = ['darwin-amd64', 'darwin-arm64', 'linux-amd64', 'linux-arm64', 'windows-amd64', 'windows-arm64']
+payloads = {}
+for target in targets:
+    name = 'mclink-helper.exe' if target.startswith('windows') else 'mclink-helper'
+    path = out / target / name
+    if not path.is_file():
+        raise SystemExit(f'Missing helper build output: {path}')
+    payloads[f'{target}/{name}'] = path.read_bytes()
+for stale in res.iterdir():
+    if stale.is_dir():
+        shutil.rmtree(stale)
+raw = io.BytesIO()
+with tarfile.open(fileobj=raw, mode='w', format=tarfile.USTAR_FORMAT) as archive:
+    for name in sorted(payloads):
+        data = payloads[name]
+        info = tarfile.TarInfo(name)
+        info.size = len(data)
+        info.mtime = 0
+        info.mode = 0o755
+        info.uid = info.gid = 0
+        info.uname = info.gname = ''
+        archive.addfile(info, io.BytesIO(data))
+# 64 MiB dictionary: cross-file matches sit ~19-100 MiB apart, so smaller
+# dictionaries lose most of the win (16 MiB -> ~33 MiB, 64 MiB -> ~17.6 MiB).
+(res / 'helpers.tar.xz').write_bytes(lzma.compress(raw.getvalue(), format=lzma.FORMAT_XZ, preset=9))
+checksums = {name: hashlib.sha256(data).hexdigest() for name, data in sorted(payloads.items())}
+(res / 'checksums.json').write_text(json.dumps(checksums, indent=2) + '\n')
+print(f'Native payload: {(res / "helpers.tar.xz").stat().st_size} bytes for {len(payloads)} targets')
 PY
+echo "Native payload, checksums: $RES"

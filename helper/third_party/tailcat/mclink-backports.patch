@@ -1,0 +1,92 @@
+--- a/tailcat.go
++++ b/tailcat.go
+@@ -180,6 +180,7 @@
+ // but there's no controlclient involved, because there's
+ // no control plane.
+ type locoBackend struct {
++	closeOnce  sync.Once
+ 	sys        tsd.System
+ 	priv       key.NodePrivate
+ 	pub        key.NodePublic
+@@ -217,12 +218,23 @@
+ }
+ 
+ func (b *locoBackend) Close() error {
+-	if e, ok := b.sys.Engine.GetOK(); ok {
+-		e.Close()
+-	}
+-	if m, ok := b.sys.NetMon.GetOK(); ok {
+-		m.Close()
+-	}
++	b.closeOnce.Do(func() {
++		if b.ns != nil {
++			b.ns.Close()
++		}
++		if e, ok := b.sys.Engine.GetOK(); ok {
++			e.Close()
++		}
++		if m, ok := b.sys.NetMon.GetOK(); ok {
++			m.Close()
++		}
++		if d, ok := b.sys.Dialer.GetOK(); ok {
++			d.Close()
++		}
++		if bus, ok := b.sys.Bus.GetOK(); ok {
++			bus.Close()
++		}
++	})
+ 	return nil
+ }
+ 
+@@ -307,6 +319,7 @@
+ 		logf(format, args...)
+ 	})
+ 	if err != nil {
++		lb.Close() // release partially initialized resources (upstream 7c2a6ea60429).
+ 		return nil, fmt.Errorf("netmon.New: %w", err)
+ 	}
+ 	sys.Set(netMon)
+@@ -341,10 +354,12 @@
+ 	}
+ 
+ 	if err := createEngine(logf, lb); err != nil {
++		lb.Close() // release partially initialized resources (upstream 7c2a6ea60429).
+ 		return nil, fmt.Errorf("createEngine: %w", err)
+ 	}
+ 	ns, err := newNetstack(logf, sys)
+ 	if err != nil {
++		lb.Close() // release partially initialized resources (upstream 7c2a6ea60429).
+ 		return nil, fmt.Errorf("newNetstack: %w", err)
+ 	}
+ 	ns.ProcessLocalIPs = true
+@@ -1007,7 +1022,8 @@
+ func (b *locoBackend) Status() *ipnstate.Status {
+ 	mc := b.sys.MagicSock.Get()
+ 	eng := b.sys.Engine.Get()
+-	var sb ipnstate.StatusBuilder
++	// Upstream 15ab9e68bfc6534a61797d7af28cedd42b54a3a5: populate peers.
++	sb := ipnstate.StatusBuilder{WantPeers: true}
+ 	mc.UpdateStatus(&sb)
+ 	eng.UpdateStatus(&sb)
+ 	return sb.Status()
+@@ -1121,6 +1137,7 @@
+ 		logf(format, args...)
+ 	})
+ 	if err != nil {
++		lb.Close() // release partially initialized resources (upstream 7c2a6ea60429).
+ 		return nil, fmt.Errorf("netmon.New: %w", err)
+ 	}
+ 	sys.Set(netMon)
+@@ -1145,10 +1162,12 @@
+ 	}
+ 
+ 	if err := createEngine(logf, lb); err != nil {
++		lb.Close() // release partially initialized resources (upstream 7c2a6ea60429).
+ 		return nil, fmt.Errorf("createEngine: %w", err)
+ 	}
+ 	ns, err := newNetstack(logf, sys)
+ 	if err != nil {
++		lb.Close() // release partially initialized resources (upstream 7c2a6ea60429).
+ 		return nil, fmt.Errorf("newNetstack: %w", err)
+ 	}
+ 	ns.ProcessLocalIPs = true // required to even reply to TCP SYNs client sends out

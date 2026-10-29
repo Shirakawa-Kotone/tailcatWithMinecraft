@@ -1,0 +1,18 @@
+plugins { id 'net.neoforged.moddev' }
+ext.minecraftVersion = '1.21.11'
+ext.javaVersion = 21
+ext.versionDirectory = '1211'
+ext.loaderName = 'neoforge'
+ext.loaderFamily = 'neoforge263'
+ext.sourceFamily = 'common12111'
+apply from: rootProject.file('platforms/shared.gradle')
+neoForge {
+    enable { version = '21.11.48'; disableRecompilation = true }
+    runs { client { client() } }
+    mods { tailcat { sourceSet sourceSets.main } }
+}
+// Shared classes are reused, while each target owns its exact loader metadata.
+sourceSets.main.resources.setSrcDirs([
+    rootProject.file('platforms/common/src/main/resources'),
+    file('src/main/resources'), rootProject.file('native')
+])

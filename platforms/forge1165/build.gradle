@@ -1,0 +1,17 @@
+plugins { id 'net.minecraftforge.gradle' }
+ext.minecraftVersion = '1.16.5'
+ext.javaVersion = 8
+ext.versionDirectory = 'Forge1165'
+ext.loaderName = 'forge'
+ext.loaderFamily = 'forge1165'
+ext.sourceFamily = 'commonForge1165'
+apply from: rootProject.file('platforms/shared.gradle')
+minecraft { mappings channel: 'official', version: '1.16.5' }
+dependencies { minecraft 'net.minecraftforge:forge:1.16.5-36.2.42' }
+tasks.named('jar') { finalizedBy 'reobfJar' }
+// Forge's injected Java8 compilation tasks use JDK8, which predates --release.
+tasks.withType(JavaCompile).configureEach {
+    options.release.unset()
+    sourceCompatibility = '1.8'
+    targetCompatibility = '1.8'
+}

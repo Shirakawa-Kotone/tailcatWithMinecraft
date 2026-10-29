@@ -1,0 +1,61 @@
+apply plugin: 'java'
+base { archivesName = "tailcat-${project.minecraftVersion}-${project.loaderName}" }
+java {
+    // Modern javac can target Java8/16 through --release; do not require a
+    // separate old JDK installation just to compile the legacy adapters.
+    toolchain.languageVersion = JavaLanguageVersion.of(Math.max(17, project.javaVersion as int))
+    withSourcesJar()
+}
+tasks.withType(JavaCompile).configureEach {
+    options.release = project.javaVersion
+    options.encoding = 'UTF-8'
+}
+def sourceFamily = project.findProperty('sourceFamily') ?: 'common'
+def loaderFamily = project.findProperty('loaderFamily')
+// Explicit srcDirs replace the default src/main/java so no directory is added twice.
+def javaFamilies = [sourceFamily, loaderFamily, "version${project.versionDirectory}"].findAll { it }
+def resourceFamilies = [sourceFamily, loaderFamily, 'common'].findAll { it }.unique()
+sourceSets.main {
+    java.setSrcDirs(javaFamilies.collect { rootProject.file("platforms/${it}/src/main/java") })
+    resources.setSrcDirs(resourceFamilies.collect { rootProject.file("platforms/${it}/src/main/resources") } + [rootProject.file('native')])
+}
+repositories { mavenCentral() }
+configurations { bundledCodec }
+dependencies {
+    implementation project(':core')
+    // Tiny pure-Java LZMA decoder used to unpack the solid native payload.
+    bundledCodec 'org.tukaani:xz:1.12'
+}
+tasks.named('jar', Jar) {
+    dependsOn ':core:classes'
+    from(project(':core').sourceSets.main.output)
+    // Shaded so every loader (Fabric/Forge/NeoForge) can read the archive without
+    // a separate runtime dependency or a loader-specific jar-in-jar layout.
+    from({ configurations.bundledCodec.collect { zipTree(it) } }) { exclude 'META-INF/**' }
+    from(rootProject.file('LICENSE'))
+}
+tasks.named('sourcesJar', Jar) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(project(':core').sourceSets.main.allSource)
+    exclude 'assets/mclink/native/**'
+}
+tasks.named('processResources') {
+    // Version/loader resources take precedence; shared translations are fallback.
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    inputs.properties(version: project.version, minecraft_version: project.minecraftVersion, java_version: project.javaVersion)
+    filesMatching(['fabric.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
+        expand(version: project.version, minecraft_version: project.minecraftVersion, java_version: project.javaVersion)
+    }
+    doFirst {
+        def nativeRoot = rootProject.file('native/assets/mclink/native')
+        def required = ['checksums.json', 'helpers.tar.xz']
+        if (required.any { !new File(nativeRoot, it).isFile() }) {
+            throw new GradleException('Bundled native payload is required. Run scripts/build-natives.sh before packaging.')
+        }
+    }
+    // All variants carry the exact same build identity used in local diagnostics.
+    doLast {
+        def target = new File(destinationDir, 'tailcat-build.properties')
+        target.text = "version=${project.version}\nloader=${project.loaderName}\n"
+    }
+}

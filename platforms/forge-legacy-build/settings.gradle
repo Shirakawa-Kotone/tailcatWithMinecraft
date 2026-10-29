@@ -1,0 +1,13 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        maven { url = 'https://maven.minecraftforge.net'; content { includeGroupByRegex 'net[.]minecraftforge.*' } }
+        gradlePluginPortal()
+    }
+}
+rootProject.name = 'tailcat-forge-legacy'
+rootProject.projectDir = file('../..')
+rootProject.buildFileName = 'platforms/forge-legacy-build/build.gradle'
+include 'core'
+def requested = providers.gradleProperty('tcTargets').getOrElse('forge1165,forge1204').split(',')
+requested.each { target -> include target; project(":${target}").projectDir = file("../../platforms/${target}") }

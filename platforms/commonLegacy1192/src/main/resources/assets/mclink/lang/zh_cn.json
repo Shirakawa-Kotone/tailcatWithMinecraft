@@ -1,0 +1,15 @@
+{
+  "mclink.share": "通过 Tailcat 分享",
+  "mclink.join": "通过 Tailcat 连接",
+  "mclink.invite": "Tailcat 邀请码",
+  "mclink.invite_hint": "粘贴以 mcl1_ 开头的 Tailcat 邀请码",
+  "mclink.starting": "正在启动加密隧道…",
+  "mclink.sharing": "世界已开启远程分享",
+  "mclink.copy": "复制邀请码",
+  "mclink.stop": "停止分享",
+  "mclink.connect": "连接",
+  "mclink.authentication_on": "正版账号验证：开启",
+  "mclink.authentication_off": "正版账号验证：关闭",
+  "mclink.authentication_rebuild": "切换会重新生成邀请",
+  "mclink.authentication_disconnect": "并断开当前访客的连接。"
+}

@@ -1,0 +1,9 @@
+ext.minecraftVersion = '1.20.4'
+ext.javaVersion = 17
+ext.versionDirectory = '1204'
+ext.loaderName = 'fabric'
+ext.fabricVersion = '0.97.3+1.20.4'
+ext.fabricLoaderVersion = '0.20.1'
+ext.sourceFamily = 'common'
+ext.loaderFamily = 'fabric'
+apply from: rootProject.file('platforms/fabric.gradle')

@@ -1,0 +1,7 @@
+# Built binaries.
+/tailcat
+/cmd/tailcat/tailcat
+
+# Go test artifacts.
+*.test
+*.out

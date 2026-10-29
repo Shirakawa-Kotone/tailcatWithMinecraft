@@ -1,0 +1,19 @@
+plugins { id 'net.neoforged.moddev.legacyforge' }
+ext.minecraftVersion = '1.17.1'
+ext.javaVersion = 16
+ext.versionDirectory = '1171'
+ext.loaderName = 'forge'
+ext.loaderFamily = 'forge1171'
+ext.sourceFamily = 'commonLegacy1171'
+apply from: rootProject.file('platforms/shared.gradle')
+legacyForge {
+    enable { forgeVersion = '1.17.1-37.1.1'; disableRecompilation = true }
+    runs { client { client() } }
+    mods { tailcat { sourceSet sourceSets.main } }
+}
+// Minecraft1.17 targets Java16 bytecode; artifact tools can run on the installed JDK17.
+tasks.named('createMinecraftArtifacts') {
+    toolsJavaExecutable = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(17)
+    }.map { it.executablePath.asFile.absolutePath }
+}

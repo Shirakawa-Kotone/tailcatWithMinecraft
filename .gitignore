@@ -1,5 +1,8 @@
 # Gradle output and caches
 .gradle/
+.gradle-user-home/
+.cache/
+.superpowers/
 **/.gradle/
 **/build/
 
@@ -7,6 +10,8 @@
 mod/run/
 mod/run-*/
 run/
+platforms/*/run/
+platforms/*/runs/
 
 # Go build output
 helper/mclink-helper
@@ -24,3 +29,6 @@ helper/bin/
 *.log
 *.tmp
 hs_err_pid*
+__pycache__/
+*.pyc
+dist/
